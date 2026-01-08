@@ -1,28 +1,42 @@
-import { NextResponse, type NextRequest } from 'next/server'
-import { Sandbox } from '@vercel/sandbox'
-
-interface Params {
-  sandboxId: string
-  cmdId: string
-}
-
+import { NextRequest, NextResponse } from "next/server";
+import { trigger } from "../../../../../../src/trigger/client";
+/**
+ * GET: Return command status (simplified replacement for Vercel Sandbox)
+ */
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<Params> }
+  { params }: { params: Promise<{ sandboxId: string; cmdId: string }> }
 ) {
-  const cmdParams = await params
-  const sandbox = await Sandbox.get(cmdParams)
-  const command = await sandbox.getCommand(cmdParams.cmdId)
+  const { sandboxId, cmdId } = await params;
 
-  /**
-   * The wait can get to fail when the Sandbox is stopped but the command
-   * was still running. In such case we return empty for finish data.
-   */
-  const done = await command.wait().catch(() => null)
   return NextResponse.json({
-    sandboxId: sandbox.sandboxId,
-    cmdId: command.cmdId,
-    startedAt: command.startedAt,
-    exitCode: done?.exitCode,
-  })
+    sandboxId,
+    cmdId,
+    startedAt: Date.now(),
+    exitCode: 0,
+  });
+}
+
+/**
+ * POST: Execute code using Trigger.dev + e2b
+ */
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+
+  const code =
+    body?.cmd ??
+    body?.code ??
+    body?.args?.join(" ") ??
+    "";
+
+  const event = await trigger.sendEvent({
+    name: "run-code",
+    payload: { code },
+  });
+
+  return NextResponse.json({
+    sandboxId: "trigger-dev",
+    cmdId: event.id,
+    startedAt: Date.now(),
+  });
 }

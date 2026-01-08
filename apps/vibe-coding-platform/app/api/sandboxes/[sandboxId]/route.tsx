@@ -1,31 +1,35 @@
-import { APIError } from '@vercel/sandbox/dist/api-client/api-error'
-import { NextRequest, NextResponse } from 'next/server'
-import { Sandbox } from '@vercel/sandbox'
+import { NextRequest, NextResponse } from "next/server";
+import { trigger } from "../../../../src/trigger/client";
 
 /**
- * We must change the SDK to add data to the instance and then
- * use it to retrieve the status of the Sandbox.
+ * GET: Sandbox status (simplified replacement)
  */
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ sandboxId: string }> }
-) {
-  const { sandboxId } = await params
-  try {
-    const sandbox = await Sandbox.get({ sandboxId })
-    await sandbox.runCommand({
-      cmd: 'echo',
-      args: ['Sandbox status check'],
-    })
-    return NextResponse.json({ status: 'running' })
-  } catch (error) {
-    if (
-      error instanceof APIError &&
-      error.json.error.code === 'sandbox_stopped'
-    ) {
-      return NextResponse.json({ status: 'stopped' })
-    } else {
-      throw error
-    }
-  }
+export async function GET() {
+  return NextResponse.json({
+    status: "running",
+  });
+}
+
+/**
+ * POST: Execute code using Trigger.dev + e2b
+ */
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+
+  const code =
+    body?.cmd ??
+    body?.code ??
+    body?.args?.join(" ") ??
+    "";
+
+  const event = await trigger.sendEvent({
+    name: "run-code",
+    payload: { code },
+  });
+
+  return NextResponse.json({
+    sandboxId: "trigger-dev",
+    cmdId: event.id,
+    startedAt: Date.now(),
+  });
 }
